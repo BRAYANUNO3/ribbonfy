@@ -4,3 +4,6 @@ __pycache__/
 # Perforce workspace files
 .p4config
 .p4ignore
+
+# Internal tests stay in Perforce, not on GitHub
+tests/

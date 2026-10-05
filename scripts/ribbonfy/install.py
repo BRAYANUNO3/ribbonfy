@@ -15,7 +15,7 @@ from ribbonfy import __version__
 SHELF = "Ribbonfy"
 BUTTON_LABEL = "Ribbonfy"
 LEGACY_LABELS = ("uvkit",)          # shelf buttons from before the rename
-COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".git", ".gitignore", ".p4config", ".p4ignore", "docs")
+COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".git", ".gitignore", ".p4config", ".p4ignore", "docs", "tests")
 
 
 def _modules_dir():

@@ -48,21 +48,13 @@ Tested on Maya [VERSIONS YOU TESTED]. Supports PySide2 (Maya 2022–2024) and Py
 4. **Orient.** The lattice axes are matched to how the shell currently runs in UV space, and the total signed area is checked so the result is never mirrored.
 5. **Fit.** Scale to the original UV area (same texel density) and re-centre on the original bounds.
 
-The math lives in `scripts/ribbonfy/core.py` with no Maya imports, so it's unit tested outside Maya:
-
-```
-python -m unittest discover tests
-```
+The math lives in `scripts/ribbonfy/core.py` with no Maya imports.
 
 ## Limitations
 
-- Quad-grid shells only. Shells with triangles, n-gons or poles are skipped (see roadmap).
+- Quad-grid shells only. Shells with triangles, n-gons or poles are skipped.
 - Meshes with construction history: the panel asks whether to delete non-deformer history first (the `ribbonfy` command on its own skips them).
 - Works on the current UV set.
-
-## Roadmap
-
-- **v0.2:** straighten the quad region of mixed shells and unfold the rest around it.
 
 ## License
 
