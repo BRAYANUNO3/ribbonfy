@@ -14,6 +14,7 @@ from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from ribbonfy import __version__, maya_io
 
 WINDOW_NAME = "ribbonfyWindow"
+DEFAULT_WIDTH = 340             # compact floating panel; users can still resize or dock it
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
 README = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "README.md"))
 _window = None
@@ -322,12 +323,15 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         lay.addWidget(run)      # main action sits at the bottom of the panel
         return page
 
-    def fit_to_content(self):
-        """Shrink a floating panel to its content so there's no empty space at the bottom."""
+    def fit_to_content(self, reset_width=False):
+        """Shrink a floating panel to its content so there's no empty space at the bottom.
+        reset_width also puts it back to the default width (only done when it opens)."""
         control = WINDOW_NAME + "WorkspaceControl"
         try:
             if cmds.workspaceControl(control, query=True, exists=True) and                     cmds.workspaceControl(control, query=True, floating=True):
                 self.adjustSize()
+                if reset_width:
+                    cmds.workspaceControl(control, edit=True, resizeWidth=max(DEFAULT_WIDTH, self.minimumWidth()))
                 cmds.workspaceControl(control, edit=True, resizeHeight=self.sizeHint().height())
         except RuntimeError:
             pass
@@ -473,6 +477,6 @@ def show():
         cmds.workspaceControl(control, edit=True, close=True)
         cmds.deleteUI(control, control=True)
     _window = RibbonfyWindow()
-    _window.show(dockable=True, floating=True)
-    QtCore.QTimer.singleShot(0, _window.fit_to_content)
+    _window.show(dockable=True, floating=True, width=DEFAULT_WIDTH)
+    QtCore.QTimer.singleShot(0, lambda: _window.fit_to_content(reset_width=True))
     return _window
