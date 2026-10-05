@@ -291,10 +291,13 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
                                                               "instead of moving it to the corner")
         self.preserve_density = _option_button("density", "Preserve texel density\nKeep the same texture "
                                                            "resolution on the shell")
+        self.layout_after = _option_button("layout", "Lay out shells\nAfter straightening, pack the shells "
+                                                     "into 0-1 so they don't overlap (Maya Layout)")
         self.keep_position.setChecked(True)
         self.preserve_density.setChecked(True)
-        box, _ = _group([self.keep_position, self.preserve_density], exclusive=False)
-        row.addWidget(box, 2)
+        self.layout_after.setChecked(False)          # off: don't move shells an artist already arranged
+        box, _ = _group([self.keep_position, self.preserve_density, self.layout_after], exclusive=False)
+        row.addWidget(box, 3)
         opts.content.addLayout(row)
         lay.addWidget(opts)
 
@@ -367,6 +370,13 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             self.summary_label.setText("Select meshes, faces or UV shells first.")
             return
         _ensure_plugin()
+        cmds.undoInfo(openChunk=True, chunkName="ribbonfy")
+        try:
+            self._run_steps()
+        finally:
+            cmds.undoInfo(closeChunk=True)
+
+    def _run_steps(self):
         if not self._resolve_history():
             return
         opts = {
@@ -394,7 +404,15 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             self.summary_label.setText("%s\nDetails unavailable: an older Ribbonfy plug-in is still loaded. "
                                        "Restart Maya to load the latest version." % text)
             return
-        self._show_report(maya_io.LAST_REPORT, time.time() - start)
+        laid_out = False
+        if self.layout_after.isChecked() and maya_io.LAST_REPORT.straightened:
+            try:
+                maya_io.layout(maya_io.LAST_REPORT)
+                laid_out = True
+            except Exception as exc:
+                self.summary_label.setText("Straightened, but layout failed: %s" % exc)
+                return
+        self._show_report(maya_io.LAST_REPORT, time.time() - start, laid_out)
 
     def _resolve_history(self):
         """Ask before touching construction history. Returns False to cancel the run."""
@@ -417,13 +435,14 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             maya_io.delete_history(with_history)
         return True
 
-    def _show_report(self, report, seconds):
+    def _show_report(self, report, seconds, laid_out=False):
         self.log.clear()
         self.log.hide()
         if report is None:
             self.fit_to_content()
             return
-        self.summary_label.setText("%s  (%.2fs)" % (report.summary(), seconds))
+        text = report.summary() + (", laid out" if laid_out else "")
+        self.summary_label.setText("%s  (%.2fs)" % (text, seconds))
         skip_brush = QtGui.QBrush(QtGui.QColor(THEME["warn"]))
         for entry in report.skipped:
             where = entry["mesh"] if entry["shell"] is None else "%s · shell %d" % (entry["mesh"], entry["shell"])

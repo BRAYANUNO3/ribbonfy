@@ -19,6 +19,8 @@ class Report(object):
         self.straightened = 0
         self.rings_opened = 0
         self.skipped = []   # dicts: mesh, shell, reason, faces
+        self.done = {}      # mesh path -> faces of the shells that were straightened
+        self.whole = set()  # meshes selected whole: lay out every shell, not just the straightened ones
 
     def skip(self, mesh, shell, reason, faces):
         self.skipped.append({"mesh": mesh, "shell": shell, "reason": reason, "faces": faces})
@@ -226,6 +228,8 @@ def compute(direction="auto", spacing="edge", keep_position=True, preserve_densi
         dag = target.dag
         name = dag.partialPathName()
         report.meshes += 1
+        if target.whole:
+            report.whole.add(dag.fullPathName())
         if _has_history(path):
             if _is_deformed(path):
                 report.skip(name, None, "is deformed (skin or blend shape); straighten its UVs before binding", [])
@@ -299,6 +303,7 @@ def compute(direction="auto", spacing="edge", keep_position=True, preserve_densi
                 new_u[uv] = u
                 new_v[uv] = v
             report.straightened += 1
+            report.done.setdefault(dag.fullPathName(), []).extend(faces)
             changed = True
 
         if changed:
@@ -307,6 +312,29 @@ def compute(direction="auto", spacing="edge", keep_position=True, preserve_densi
                                 old_assign if rings_cut else None,
                                 _assignment(face_uvs) if rings_cut else None))
     return edits, report
+
+
+def layout(report, spacing=0.004):
+    """Pack the straightened shells into 0-1 with Maya's Layout (Unfold3D).
+
+    Texel density is kept relative between shells and only 90-degree turns are
+    allowed, so the strips stay straight and axis-aligned.
+    """
+    if not report or not report.done:
+        return 0
+    if not cmds.pluginInfo("Unfold3D", query=True, loaded=True):
+        cmds.loadPlugin("Unfold3D", quiet=True)
+    faces = []
+    for mesh, ids in report.done.items():
+        if mesh in report.whole:
+            faces.append(mesh + ".f[*]")       # pack skipped shells too, so nothing lands on top of them
+        else:
+            faces.extend(face_ranges(mesh, sorted(set(ids))))
+    # preScaleMode 1 keeps relative 3D density; layoutScaleMode 2 scales the result to fit 0-1.
+    cmds.u3dLayout(faces, resolution=1024, preScaleMode=1, layoutScaleMode=2,
+                   shellSpacing=spacing, tileMargin=spacing, packBox=[0, 1, 0, 1],
+                   preRotateMode=0, rotateStep=90, rotateMin=0, rotateMax=360)
+    return len(faces)
 
 
 def face_ranges(mesh, faces):
