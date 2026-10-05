@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Perforce workspace files
+.p4config
+.p4ignore

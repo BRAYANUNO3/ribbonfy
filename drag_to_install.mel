@@ -1,0 +1,19 @@
+// Drag this file into the Maya viewport to install ribbonfy.
+//
+// Maya's Safe Mode checks Python that runs while a dropped file is still
+// loading (limited imports, no open()). So this file only works out where it
+// lives and queues the install with evalDeferred; the Python runs right after
+// the drop finishes, outside that check.
+global proc ribbonfyInstallLocator() {}
+{
+    string $where = `whatIs ribbonfyInstallLocator`;
+    string $file = `substitute "Mel procedure found in: " $where ""`;
+    string $root = dirname($file);
+    // Put this copy's scripts/ first and drop any ribbonfy modules already imported
+    // (an older install or a dev checkout), then install.
+    string $py = "import sys; _p = r'" + $root + "/scripts'; "
+               + "sys.path[:] = [x for x in sys.path if x != _p]; sys.path.insert(0, _p); "
+               + "[sys.modules.pop(_k) for _k in list(sys.modules) if _k == 'ribbonfy' or _k.startswith('ribbonfy.')]; "
+               + "import ribbonfy.install; ribbonfy.install.install(r'" + $root + "')";
+    evalDeferred -lowestPriority ("python(\"" + $py + "\")");
+}
