@@ -22,32 +22,6 @@ def _plural(n, word):
     return "%d %s%s" % (n, word, "" if n == 1 else "s")
 
 
-def _signed_area(loop, coords):
-    area = 0.0
-    n = len(loop)
-    for k in range(n):
-        u0, v0 = coords(loop[k])
-        u1, v1 = coords(loop[(k + 1) % n])
-        area += u0 * v1 - u1 * v0
-    return 0.5 * area
-
-
-def _bbox(coords, uv_ids):
-    u0 = v0 = float("inf")
-    u1 = v1 = float("-inf")
-    for uv in uv_ids:
-        u, v = coords(uv)
-        if u < u0:
-            u0 = u
-        if u > u1:
-            u1 = u
-        if v < v0:
-            v0 = v
-        if v > v1:
-            v1 = v
-    return u0, v0, u1, v1
-
-
 def straighten_shell(face_uvs, face_verts, us, vs, points=None,
                      direction="auto", spacing="edge",
                      keep_position=True, preserve_density=True):
@@ -240,29 +214,46 @@ def straighten_shell(face_uvs, face_verts, us, vs, points=None,
         su = -1.0 if aj_u < 0 else 1.0
         sv = -1.0 if ai_v < 0 else 1.0
 
-    def original(uv):
-        return us[uv], vs[uv]
-
-    signs = [su, sv]
-
-    def raw(uv):
+    # Lay every UV on the grid once (plain lists, no per-corner function calls).
+    uv_ids = list(lattice)
+    bu = {}
+    bv = {}
+    for uv in uv_ids:
         i, j = lattice[uv]
         if i_on_u:
-            return signs[0] * xs[i], signs[1] * ys[j]
-        return signs[0] * ys[j], signs[1] * xs[i]
+            bu[uv] = su * xs[i]
+            bv[uv] = sv * ys[j]
+        else:
+            bu[uv] = su * ys[j]
+            bv[uv] = sv * xs[i]
+
+    # One pass over the faces: signed and absolute area, before and after.
+    orig_signed = new_signed = orig_area = new_area = 0.0
+    for loop in face_uvs:
+        a, b, c, d = loop
+        o = 0.5 * ((us[a] * vs[b] - us[b] * vs[a]) + (us[b] * vs[c] - us[c] * vs[b])
+                   + (us[c] * vs[d] - us[d] * vs[c]) + (us[d] * vs[a] - us[a] * vs[d]))
+        n = 0.5 * ((bu[a] * bv[b] - bu[b] * bv[a]) + (bu[b] * bv[c] - bu[c] * bv[b])
+                   + (bu[c] * bv[d] - bu[d] * bv[c]) + (bu[d] * bv[a] - bu[a] * bv[d]))
+        orig_signed += o
+        new_signed += n
+        orig_area += o if o > 0 else -o
+        new_area += n if n > 0 else -n
 
     # Match the shell's current winding so the texture is never mirrored.
-    orig_signed = sum(_signed_area(loop, original) for loop in face_uvs)
-    new_signed = sum(_signed_area(loop, raw) for loop in face_uvs)
     if abs(orig_signed) > EPS and (new_signed > 0) != (orig_signed > 0):
-        signs[1] = -signs[1]
+        for uv in uv_ids:
+            bv[uv] = -bv[uv]
 
     # ---- 5. scale and position --------------------------------------------
-    uv_ids = list(lattice)
-    ou0, ov0, ou1, ov1 = _bbox(original, uv_ids)
-    nu0, nv0, nu1, nv1 = _bbox(raw, uv_ids)
-    orig_area = sum(abs(_signed_area(loop, original)) for loop in face_uvs)
-    new_area = sum(abs(_signed_area(loop, raw)) for loop in face_uvs)
+    ou0 = min(us[uv] for uv in uv_ids)
+    ou1 = max(us[uv] for uv in uv_ids)
+    ov0 = min(vs[uv] for uv in uv_ids)
+    ov1 = max(vs[uv] for uv in uv_ids)
+    nu0 = min(bu.values())
+    nu1 = max(bu.values())
+    nv0 = min(bv.values())
+    nv1 = max(bv.values())
 
     # Original UVs with no real area (rows stacked on top of each other, e.g. a
     # planar projection down a tube) give no texel density to preserve. Scaling
@@ -284,11 +275,7 @@ def straighten_shell(face_uvs, face_verts, us, vs, points=None,
         cu = -nu0 * scale
         cv = -nv0 * scale
 
-    result = {}
-    for uv in uv_ids:
-        u, v = raw(uv)
-        result[uv] = (u * scale + cu, v * scale + cv)
-    return result
+    return dict((uv, (bu[uv] * scale + cu, bv[uv] * scale + cv)) for uv in uv_ids)
 
 
 # Closed rings: a quad band that wraps all the way round (open end of a pipe)
