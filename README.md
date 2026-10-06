@@ -14,6 +14,10 @@ One-click UV straightening for Maya. Select curved quad strips (pipes, cables, t
 - **Safe.** Shells that aren't clean quad grids are skipped and listed with the reason; click one to select it. Fully undoable with Ctrl+Z.
 - **Fast.** Bulk API reads and writes, one linear pass per shell. A 100,000-quad shell straightens in about 1.4 s; typical game strips take milliseconds.
 
+It also works on organic shapes, like this head split into strip shells:
+
+![Ribbonfy straightening the strip shells of an organic head](docs/organic_head.gif)
+
 ## Install
 
 1. Unzip `ribbonfy-v0.1.0.zip` anywhere.
