@@ -2,8 +2,7 @@
 
 One-click UV straightening for Maya. Select curved quad strips (pipes, cables, trims, belts) and turn them into straight, grid-aligned UV shells in one click.
 
-![Ribbonfy demo](docs/demo.gif)
-<!-- Record: a curved pipe shell in the UV editor → click Straighten UVs → straight strip. 5–8 seconds. -->
+![Ribbonfy straightening 150 UV shells in one click, then laying them out](docs/hero.gif)
 
 ## Features (v0.1)
 
