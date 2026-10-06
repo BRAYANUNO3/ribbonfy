@@ -10,9 +10,10 @@ One-click UV straightening for Maya. Select curved quad strips (pipes, cables, t
 - **Real proportions.** Rows and columns are spaced by averaged 3D edge lengths, so textures don't stretch. Uniform spacing is one toggle away.
 - **Direction control.** Auto follows each shell's current layout; U or V forces the long side onto that axis.
 - **Keeps your layout.** Texel density and shell position are preserved, and shells are never mirrored.
+- **Optional layout.** Turn on *Lay out shells* to pack the straightened shells into 0-1 with Maya's Layout right after, so they don't overlap. Off by default, so shells you've already arranged stay put.
 - **Closed rings.** Bands that wrap all the way around, like the open end of a pipe, are cut open along one line of edges and straightened in the same click. No history is added, and Ctrl+Z puts the seam back.
-- **Safe.** Shells that aren't clean quad grids are skipped and listed with the reason; click one to select it. Fully undoable with Ctrl+Z.
-- **Fast.** Bulk API reads and writes, one linear pass per shell. A 100,000-quad shell straightens in about 1.4 s; typical game strips take milliseconds.
+- **Safe.** Shells that aren't clean quad grids are skipped and left unchanged. After a run they're selected so you can see them, and the reasons are printed in the Script Editor. One Ctrl+Z undoes the whole run.
+- **Fast.** Bulk API reads and writes, one linear pass per shell. A 100,000-quad shell takes about 1.5 s, and a 324,000-face asset with 380 shells about 10 s; typical game strips take milliseconds.
 
 It also works on organic shapes, like this head split into strip shells:
 
@@ -41,22 +42,29 @@ Scripting:
 cmds.ribbonfy(direction="auto", spacing="edge", keepPosition=True, preserveDensity=True)
 ```
 
-Tested on Maya [VERSIONS YOU TESTED]. Supports PySide2 (Maya 2022–2024) and PySide6 (Maya 2025+), no extra packages needed.
+*Lay out shells* is a panel option; from a script, run Maya's Layout after the command.
+
+Tested on Maya 2026. Written for PySide6 (Maya 2025 and later) and PySide2 (Maya 2022 to 2024); the older versions haven't been tested yet. No extra packages needed.
 
 ## How it works
 
-1. **Validate.** The shell must be all quads with no interior poles. Anything else is skipped, never mangled.
+1. **Validate.** The shell must be all quads with no interior poles. Anything else is skipped and left as it is.
 2. **Grid walk.** The first face gets lattice corners (0,0), (1,0), (1,1), (0,1). A breadth-first walk crosses shared UV edges; each neighbour's two free corners land one lattice step beyond the shared edge, away from the face it came from. This works regardless of face winding. If a UV would land on two different lattice points, the shell is a closed loop or hides a pole, so it's skipped.
 3. **Space.** Each lattice column gets the mean 3D length of the edges that span it (each row likewise). A running sum turns that into U and V.
 4. **Orient.** The lattice axes are matched to how the shell currently runs in UV space, and the total signed area is checked so the result is never mirrored.
 5. **Fit.** Scale to the original UV area (same texel density) and re-centre on the original bounds.
 
+Closed rings get one extra step first: Ribbonfy walks a line of edges from one border of the band to the other and splits the UVs there, which turns the ring into an ordinary strip.
+
 The math lives in `scripts/ribbonfy/core.py` with no Maya imports.
 
 ## Limitations
 
-- Quad-grid shells only. Shells with triangles, n-gons or poles are skipped.
+- Quad-grid shells only. Shells with triangles, n-gons or poles are skipped. On hard-surface models, bevel corners often leave an n-gon attached to a strip; cut the corner into its own shell and the strip straightens.
+- When Ribbonfy opens a ring it picks the seam itself. If the seam's position matters, cut it yourself first and Ribbonfy keeps it.
+- With *Keep shell position* on, shells go back where their curved versions were, so shells that overlapped before still overlap. Turn on *Lay out shells*, or run Maya's Layout afterwards.
 - Meshes with construction history: the panel asks whether to delete non-deformer history first (the `ribbonfy` command on its own skips them).
+- Skinned or blend-shaped meshes are skipped; straighten their UVs before binding.
 - Works on the current UV set.
 
 ## License

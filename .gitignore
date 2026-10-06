@@ -1,9 +1,12 @@
 __pycache__/
 *.pyc
 
-# Perforce workspace files
+# Local-only files
 .p4config
 .p4ignore
-
-# Internal tests stay in Perforce, not on GitHub
 tests/
+
+# Only the approved demo GIFs are published
+docs/*.gif
+!docs/hero.gif
+!docs/organic_head.gif
