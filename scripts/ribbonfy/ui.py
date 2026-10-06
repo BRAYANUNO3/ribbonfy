@@ -395,7 +395,9 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         laid_out = False
         if self.layout_after.isChecked() and report.straightened:
             try:
-                maya_io.layout(report)
+                # Keep the long side where the artist asked for it; only Auto may rotate.
+                direction = self.direction_group.checkedButton().property("key")
+                maya_io.layout(report, allow_rotate=(direction == "auto"))
                 laid_out = True
             except Exception as exc:
                 _message("Straightened, but layout failed: %s" % exc, warn=True)

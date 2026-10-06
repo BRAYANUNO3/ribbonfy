@@ -314,11 +314,12 @@ def compute(direction="auto", spacing="edge", keep_position=True, preserve_densi
     return edits, report
 
 
-def layout(report, spacing=0.004):
+def layout(report, spacing=0.004, allow_rotate=True):
     """Pack the straightened shells into 0-1 with Maya's Layout (Unfold3D).
 
-    Texel density is kept relative between shells and only 90-degree turns are
-    allowed, so the strips stay straight and axis-aligned.
+    Texel density is kept relative between shells. With allow_rotate, shells may
+    turn in 90-degree steps for a tighter pack (strips stay axis-aligned); without
+    it, they keep the direction they were straightened in.
     """
     if not report or not report.done:
         return 0
@@ -333,7 +334,7 @@ def layout(report, spacing=0.004):
     # preScaleMode 1 keeps relative 3D density; layoutScaleMode 2 scales the result to fit 0-1.
     cmds.u3dLayout(faces, resolution=1024, preScaleMode=1, layoutScaleMode=2,
                    shellSpacing=spacing, tileMargin=spacing, packBox=[0, 1, 0, 1],
-                   preRotateMode=0, rotateStep=90, rotateMin=0, rotateMax=360)
+                   preRotateMode=0, rotateStep=90, rotateMin=0, rotateMax=360 if allow_rotate else 0)
     return len(faces)
 
 
