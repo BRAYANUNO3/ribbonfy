@@ -2,7 +2,12 @@
 
 One-click UV straightening for Maya. Select curved quad strips (pipes, cables, trims, belts) and turn them into straight, grid-aligned UV shells in one click.
 
-![Ribbonfy straightening 150 UV shells in one click, then laying them out](docs/hero.gif)
+<p>
+  <img src="docs/hero.gif" width="49%" alt="Ribbonfy straightening 150 UV shells in one click, then laying them out">
+  <img src="docs/organic_head.gif" width="49%" alt="Ribbonfy straightening the strip shells of an organic head">
+</p>
+
+Left: 150 curved strips straightened and laid out in one click. Right: an organic head split into strip shells.
 
 ## Features (v0.1)
 
@@ -14,10 +19,6 @@ One-click UV straightening for Maya. Select curved quad strips (pipes, cables, t
 - **Closed rings.** Bands that wrap all the way around, like the open end of a pipe, are cut open along one line of edges and straightened in the same click. No history is added, and Ctrl+Z puts the seam back.
 - **Safe.** Shells that aren't clean quad grids are skipped and left unchanged. After a run they're selected so you can see them, and the reasons are printed in the Script Editor. One Ctrl+Z undoes the whole run.
 - **Fast.** Bulk API reads and writes, one linear pass per shell. A 100,000-quad shell takes about 1.5 s, and a 324,000-face asset with 380 shells about 10 s; typical game strips take milliseconds.
-
-It also works on organic shapes, like this head split into strip shells:
-
-![Ribbonfy straightening the strip shells of an organic head](docs/organic_head.gif)
 
 ## Install
 
