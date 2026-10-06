@@ -1,6 +1,5 @@
 """Ribbonfy panel. Open with: import ribbonfy.ui; ribbonfy.ui.show()"""
 import os
-import time
 
 try:
     from PySide6 import QtCore, QtGui, QtWidgets          # Maya 2025+
@@ -49,7 +48,6 @@ QFrame#sectionHeader { background: %(header)s; border: none; border-top-left-rad
 QFrame#sectionHeader:hover { background: #303030; }
 QLabel#sectionTitle { color: %(text)s; font-weight: bold; letter-spacing: 1px; }
 QLabel#selection { color: %(text)s; font-weight: bold; }
-QLabel#summary { color: %(text)s; }
 
 QWidget#group { background: %(field)s; border: 1px solid %(border)s; border-radius: 3px; }
 QToolButton#opt { background: transparent; border: none; border-radius: 2px; }
@@ -61,10 +59,6 @@ QPushButton#primary { background: %(select)s; color: white; border: 1px solid #3
 QPushButton#primary:hover { background: %(select_hover)s; }
 QPushButton#primary:pressed { background: %(select_down)s; }
 
-QListWidget#log { background: %(field)s; color: %(text)s; border: 1px solid %(border)s; border-radius: 3px;
-                  font-family: Consolas, monospace; font-size: 11px; }
-QListWidget#log::item { padding: 3px 4px; }
-QListWidget#log::item:selected { background: %(select)s; color: white; }
 QLabel#footer { color: %(muted)s; font-size: 10px; }
 QToolTip { background: %(header)s; color: %(text)s; border: 1px solid %(select)s; padding: 4px; }
 """ % THEME
@@ -79,6 +73,15 @@ def _ensure_plugin():
         here = os.path.dirname(os.path.abspath(__file__))
         cmds.loadPlugin(os.path.normpath(os.path.join(here, "..", "..", "plug-ins", "ribbonfy_plugin.py")),
                         quiet=True)
+
+
+def _message(text, warn=False):
+    """Short fade-out message at the top of the viewport (warnings also go to the Script Editor)."""
+    if warn:
+        cmds.warning("Ribbonfy: " + text)
+    colour = "#e2a557" if warn else "#dddddd"
+    cmds.inViewMessage(assistMessage='<span style="color:%s">%s</span>' % (colour, text),
+                       position="topCenter", fade=True, fadeStayTime=2500)
 
 
 def _icon(name):
@@ -309,19 +312,6 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         run.setCursor(QtCore.Qt.PointingHandCursor)
         run.clicked.connect(self._run)
 
-        report = Section("Report", "report", "Results of the last run. Click a skipped shell to select it.")
-        self.summary_label = QtWidgets.QLabel("Select meshes, faces or UV shells, then straighten.")
-        self.summary_label.setObjectName("summary")
-        self.summary_label.setWordWrap(True)
-        report.content.addWidget(self.summary_label)
-        self.log = QtWidgets.QListWidget()
-        self.log.setObjectName("log")
-        self.log.setToolTip("Click a skipped shell to select it")
-        self.log.itemClicked.connect(self._select_item)
-        self.log.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.log.hide()                     # only shown when something was skipped
-        report.content.addWidget(self.log)
-        lay.addWidget(report)
         lay.addStretch(1)
         lay.addWidget(run)      # main action sits at the bottom of the panel
         return page
@@ -331,7 +321,8 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
         reset_width also puts it back to the default width (only done when it opens)."""
         control = WINDOW_NAME + "WorkspaceControl"
         try:
-            if cmds.workspaceControl(control, query=True, exists=True) and                     cmds.workspaceControl(control, query=True, floating=True):
+            if cmds.workspaceControl(control, query=True, exists=True) and \
+                    cmds.workspaceControl(control, query=True, floating=True):
                 self.adjustSize()
                 if reset_width:
                     cmds.workspaceControl(control, edit=True, resizeWidth=max(DEFAULT_WIDTH, self.minimumWidth()))
@@ -367,7 +358,7 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
 
     def _run(self):
         if not om.MGlobal.getActiveSelectionList().length():
-            self.summary_label.setText("Select meshes, faces or UV shells first.")
+            _message("Select meshes, faces or UV shells first.", warn=True)
             return
         _ensure_plugin()
         cmds.undoInfo(openChunk=True, chunkName="ribbonfy")
@@ -386,33 +377,44 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             "preserveDensity": self.preserve_density.isChecked(),
         }
         cmds.waitCursor(state=True)
-        start = time.time()
         maya_io.LAST_REPORT = None
         try:
             result = cmds.ribbonfy(**opts)
-        except Exception as exc:   # surface any failure in the panel, not just the script editor
-            self.summary_label.setText("Error: %s" % exc)
+        except Exception as exc:
+            _message("Ribbonfy failed: %s" % exc, warn=True)
             return
         finally:
             cmds.waitCursor(state=False)
-        if maya_io.LAST_REPORT is None:
+        report = maya_io.LAST_REPORT
+        if report is None:
             # The command ran but its report went to another copy of ribbonfy, which
             # happens when an older plug-in is still loaded in this Maya session.
-            self.log.clear()
-            self.log.hide()
             text = result[0] if isinstance(result, (list, tuple)) and result else (result or "Done")
-            self.summary_label.setText("%s\nDetails unavailable: an older Ribbonfy plug-in is still loaded. "
-                                       "Restart Maya to load the latest version." % text)
+            _message("%s. Restart Maya to load the latest Ribbonfy." % text, warn=True)
             return
         laid_out = False
-        if self.layout_after.isChecked() and maya_io.LAST_REPORT.straightened:
+        if self.layout_after.isChecked() and report.straightened:
             try:
-                maya_io.layout(maya_io.LAST_REPORT)
+                maya_io.layout(report)
                 laid_out = True
             except Exception as exc:
-                self.summary_label.setText("Straightened, but layout failed: %s" % exc)
+                _message("Straightened, but layout failed: %s" % exc, warn=True)
                 return
-        self._show_report(maya_io.LAST_REPORT, time.time() - start, laid_out)
+        self._finish(report, laid_out)
+
+    def _finish(self, report, laid_out):
+        """Show the result in the viewport and select whatever was skipped."""
+        text = report.summary() + (", laid out" if laid_out else "")
+        if report.skipped:
+            picks = []
+            for entry in report.skipped:
+                picks.extend(maya_io.face_ranges(entry["mesh"], entry["faces"]) if entry["faces"]
+                             else [entry["mesh"]])
+                where = entry["mesh"] if entry["shell"] is None else "%s shell %d" % (entry["mesh"], entry["shell"])
+                print("Ribbonfy skipped %s: %s" % (where, entry["reason"]))
+            cmds.select(picks, replace=True)
+            text += ". Skipped shells are selected (reasons in the Script Editor)"
+        _message(text, warn=bool(report.skipped))
 
     def _resolve_history(self):
         """Ask before touching construction history. Returns False to cancel the run."""
@@ -429,40 +431,11 @@ class RibbonfyWindow(MayaQWidgetDockableMixin, QtWidgets.QWidget):
             button=["Delete history", "Skip these", "Cancel"],
             defaultButton="Delete history", cancelButton="Cancel", dismissString="Cancel")
         if choice == "Cancel":
-            self.summary_label.setText("Cancelled. Nothing changed.")
+            _message("Cancelled. Nothing changed.")
             return False
         if choice == "Delete history":
             maya_io.delete_history(with_history)
         return True
-
-    def _show_report(self, report, seconds, laid_out=False):
-        self.log.clear()
-        self.log.hide()
-        if report is None:
-            self.fit_to_content()
-            return
-        text = report.summary() + (", laid out" if laid_out else "")
-        self.summary_label.setText("%s  (%.2fs)" % (text, seconds))
-        skip_brush = QtGui.QBrush(QtGui.QColor(THEME["warn"]))
-        for entry in report.skipped:
-            where = entry["mesh"] if entry["shell"] is None else "%s · shell %d" % (entry["mesh"], entry["shell"])
-            item = QtWidgets.QListWidgetItem("SKIP  %s: %s" % (where, entry["reason"]))
-            item.setForeground(skip_brush)
-            item.setData(QtCore.Qt.UserRole, (entry["mesh"], entry["faces"]))
-            self.log.addItem(item)
-        if report.skipped:
-            rows = min(len(report.skipped), 8)            # grow with the list, scroll past 8 lines
-            row_h = self.log.sizeHintForRow(0) or 20
-            self.log.setFixedHeight(rows * row_h + 2 * self.log.frameWidth() + 4)
-            self.log.show()
-        QtCore.QTimer.singleShot(0, self.fit_to_content)
-
-    def _select_item(self, item):
-        mesh, faces = item.data(QtCore.Qt.UserRole)
-        if faces:
-            cmds.select(maya_io.face_ranges(mesh, faces), replace=True)
-        else:
-            cmds.select(mesh, replace=True)
 
     # ---- cleanup ---------------------------------------------------------
     def cleanup(self):
